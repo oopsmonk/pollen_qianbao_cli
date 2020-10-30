@@ -15,7 +15,7 @@ A CLI wallet to interact with Pollen network on POSIX and embedded systems.
 
 # Disclaimer
 
-This application is based on [pollen_qianbao](https://github.com/oopsmonk/pollen_qianbao), it is under developing and tested with [GoShimmer-0.3.0](https://github.com/iotaledger/goshimmer/releases/tag/v0.3.0) on Ubuntu 18.04 and Raspberry Pi.  
+This application is based on [goshimmer-client-c](https://github.com/oopsmonk/goshimmer-client-c), it is under developing and tested with [GoShimmer-0.3.0](https://github.com/iotaledger/goshimmer/releases/tag/v0.3.0) on Ubuntu 18.04 and Raspberry Pi.  
 
 It's not guarantee to work with other GoShimmer release or systems, please use with caution!  
 

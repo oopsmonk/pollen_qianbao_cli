@@ -1,18 +1,18 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(pollen_cli DESCRIPTION "IOTA Pollen wallet CLI application")
+project(pollen_cli DESCRIPTION "IOTA Pollen wallet CLI")
 
 enable_language(C)
 
-# fetch pollen_qianbao
+# fetch goshimmer client library
 include(FetchContent)
 FetchContent_Declare(
-  pollen_qianbao
-  GIT_REPOSITORY http://github.com/oopsmonk/pollen_qianbao.git
-  GIT_TAG 490793e0610927ee8837a5f0e5b3f222f8b6938e)
+  goshimmer-client
+  GIT_REPOSITORY http://github.com/oopsmonk/goshimmer-client-c.git
+  GIT_TAG e1c7e219ca420d22574a008fe678866b3faff3ac)
 
-message(STATUS "Fetching pollen library")
-FetchContent_MakeAvailable(pollen_qianbao)
+message(STATUS "Fetching goshimmer library")
+FetchContent_MakeAvailable(goshimmer-client)
 
 # external libs module
 include(ExternalProject)
@@ -33,7 +33,7 @@ target_include_directories(
 
 target_link_libraries(
   ${CMAKE_PROJECT_NAME}
-  PRIVATE qian_bao # wallet lib
+  PRIVATE goshimmer_client # wallet lib
           argtable3 # arg parsing
           linenoise # readline lib
           m # for linenoise
