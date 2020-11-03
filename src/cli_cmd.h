@@ -2,6 +2,8 @@
 
 #include "linenoise.h"
 
+#include "core/types.h"
+
 #define UNUSED(x) (void)(x)
 
 typedef int32_t cli_err_t;
@@ -67,8 +69,9 @@ extern "C" {
 void completion_callback(char const *buf, linenoiseCompletions *lc);
 char *hints_callback(char const *buf, int *color, int *bold);
 
-cli_err_t cli_command_init(char url[], uint16_t port, char seed_str[], uint64_t last_addr_idx,
-                           uint64_t first_unspent_idx, uint64_t last_unspent_idx);
+cli_err_t cli_command_init(char url[], uint16_t port, byte_t seed[], uint64_t last_addr_idx, uint64_t first_unspent_idx,
+                           uint64_t last_unspent_idx);
+
 cli_err_t cli_command_cleanup();
 cli_err_t cli_command_run(char const *const cmdline, cli_err_t *cmd_ret);
 

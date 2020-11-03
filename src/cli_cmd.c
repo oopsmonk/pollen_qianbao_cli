@@ -5,6 +5,7 @@
 
 #include "argtable3.h"
 #include "cli_cmd.h"
+#include "settings.h"
 #include "split_argv.h"
 #include "uthash.h"
 
@@ -119,6 +120,26 @@ static void cmd_register_help() {
   utarray_push_back(cli_ctx.cmd_array, &cmd);
 }
 
+//========== Exit ==========
+static cli_err_t fn_exit(int argc, char **argv) {
+  UNUSED(argc);
+  UNUSED(argv);
+  wallet_settings_write(cli_ctx.wallet->addr_manager, "./wallet.bin");
+  printf("Settings write to ./wallet.bin\n");
+  return CLI_OK;
+}
+
+static void cmd_register_exit() {
+  cli_cmd_t cmd = {
+      .command = "exit",
+      .help = "Exist and Save wallet status",
+      .hint = NULL,
+      .func = &fn_exit,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
 //==========NODE_INFO==========
 static cli_err_t fn_node_info(int argc, char **argv) {
   UNUSED(argc);
@@ -167,23 +188,168 @@ static void cmd_register_balance() {
   utarray_push_back(cli_ctx.cmd_array, &cmd);
 }
 
+//========== Addresses ==========
+static cli_err_t fn_addresses(int argc, char **argv) {
+  char addr_str[TANGLE_ADDRESS_BASE58_BUF];
+  addr_list_t *addrs = am_addresses(cli_ctx.wallet->addr_manager);
+  address_t *elm = NULL;
+  ADDR_LIST_FOREACH(addrs, elm) {
+    address_2_base58(elm->addr, addr_str);
+    printf("[%" PRIu64 "] %s %s\n", elm->index, addr_str,
+           am_is_spent_address(cli_ctx.wallet->addr_manager, elm->index) ? "[spent]" : "");
+  }
+
+  return CLI_OK;
+}
+
+static void cmd_register_addresses() {
+  cli_cmd_t cmd = {
+      .command = "addresses",
+      .help = "list addresses",
+      .hint = NULL,
+      .func = &fn_addresses,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
+//========== Wallet Info ==========
+static cli_err_t fn_wallet_info(int argc, char **argv) {
+  wallet_refresh(cli_ctx.wallet, true);
+  wallet_status_print(cli_ctx.wallet);
+  return CLI_OK;
+}
+
+static void cmd_register_wallet_info() {
+  cli_cmd_t cmd = {
+      .command = "wallet_info",
+      .help = "Shows wallet information",
+      .hint = NULL,
+      .func = &fn_wallet_info,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
+//========== Request Funds ==========
+static cli_err_t fn_req_funds(int argc, char **argv) {
+  wallet_request_funds(cli_ctx.wallet);
+  return CLI_OK;
+}
+
+static void cmd_register_req_funds() {
+  cli_cmd_t cmd = {
+      .command = "req_funds",
+      .help = "Request funds from the facet",
+      .hint = NULL,
+      .func = &fn_req_funds,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
+//========== SEED ==========
+static int fn_seed(int argc, char **argv) {
+  char seed_str[TANGLE_SEED_BASE58_BUF];
+  if (seed_2_base58(cli_ctx.wallet->addr_manager->seed, seed_str) == true) {
+    printf("%s\n", seed_str);
+  } else {
+    printf("Gets seed failed\n");
+  }
+  return 0;
+}
+
+static void cmd_register_seed() {
+  cli_cmd_t cmd = {
+      .command = "seed",
+      .help = "Shows the seed of this wallet",
+      .hint = NULL,
+      .func = &fn_seed,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
+//========== New Address ==========
+static int fn_new_address(int argc, char **argv) {
+  byte_t addr[TANGLE_ADDRESS_BYTES];
+  char addr_str[TANGLE_ADDRESS_BASE58_BUF];
+  am_get_new_address(cli_ctx.wallet->addr_manager, addr);
+  if (address_2_base58(addr, addr_str)) {
+    printf("%s\n", addr_str);
+  } else {
+    printf("Converting address to base58 failed\n");
+  }
+  return 0;
+}
+
+static void cmd_register_new_address() {
+  cli_cmd_t cmd = {
+      .command = "new_address",
+      .help = "Gest a new address",
+      .hint = NULL,
+      .func = &fn_new_address,
+      .argtable = NULL,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
+//========== Send Funds ==========
+static struct {
+  struct arg_str *receiver;
+  struct arg_str *value;
+  struct arg_end *end;
+} send_funds_args;
+
+static int fn_send_funds(int argc, char **argv) {
+  int nerrors = arg_parse(argc, argv, (void **)&send_funds_args);
+  if (nerrors != 0) {
+    arg_print_errors(stderr, send_funds_args.end, argv[0]);
+    return -1;
+  }
+
+  // check parameters
+  char const *receiver = send_funds_args.receiver->sval[0];
+  char *endptr = NULL;
+  int64_t value = strtoll(send_funds_args.value->sval[0], &endptr, 10);
+  if (value <= 0) {
+    printf("Error: funds <= 0\n");
+    return -1;
+  }
+
+  send_funds_op_t send_op = {};
+  send_op.amount = value;
+  if (!address_from_base58(receiver, send_op.receiver)) {
+    printf("Invalid receiver address\n");
+    return -1;
+  }
+  return wallet_send_funds(cli_ctx.wallet, &send_op);
+}
+
+static void cmd_register_send_funds() {
+  send_funds_args.receiver = arg_str1(NULL, NULL, "<RECEIVER>", "A receiver address in base58 encoding");
+  send_funds_args.value = arg_str0("v", "value", "<VALUE>", "A token value");
+  send_funds_args.end = arg_end(2);
+
+  cli_cmd_t cmd = {
+      .command = "send_funds",
+      .help = "Issue a payment.",
+      .hint = NULL,
+      .func = &fn_send_funds,
+      .argtable = &send_funds_args,
+  };
+  utarray_push_back(cli_ctx.cmd_array, &cmd);
+}
+
 //==========END OF COMMANDS==========
 
-cli_err_t cli_command_init(char url[], uint16_t port, char seed_str[], uint64_t last_addr_idx,
-                           uint64_t first_unspent_idx, uint64_t last_unspent_idx) {
+cli_err_t cli_command_init(char url[], uint16_t port, byte_t seed[], uint64_t last_addr_idx, uint64_t first_unspent_idx,
+                           uint64_t last_unspent_idx) {
   // init command line paring buffer
   cli_ctx.parsing_buf = calloc(CLI_LINE_BUFFER, 1);
   if (cli_ctx.parsing_buf == NULL) {
     printf("command line buffer allocating failed\n");
     return CLI_ERR_OOM;
-  }
-
-  // init pollen wallet
-  byte_t seed[TANGLE_SEED_BYTES];
-  if (seed_str == NULL) {
-    random_seed(seed);
-  } else {
-    seed_from_base58(seed_str, seed);
   }
 
   cli_ctx.wallet = wallet_init(url, port, seed, last_addr_idx, first_unspent_idx, last_unspent_idx);
@@ -204,8 +370,15 @@ cli_err_t cli_command_init(char url[], uint16_t port, char seed_str[], uint64_t 
 
   // registing commands
   cmd_register_help();
+  cmd_register_exit();
   cmd_register_node_info();
   cmd_register_balance();
+  cmd_register_addresses();
+  cmd_register_wallet_info();
+  cmd_register_req_funds();
+  cmd_register_new_address();
+  cmd_register_seed();
+  cmd_register_send_funds();
 
   return CLI_OK;
 }
